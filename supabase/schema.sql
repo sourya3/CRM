@@ -1,0 +1,18 @@
+create extension if not exists "pgcrypto";
+create type lead_status as enum ('new','contacted','interested','follow_up','enrolled','lost');
+create type payment_method as enum ('cash','bank_transfer','qr','online','other');
+create type payment_status as enum ('pending','partial','paid');
+create type enrollment_status as enum ('active','completed','cancelled');
+create type attendance_status as enum ('present','absent','late','excused');
+
+create table courses(id uuid primary key default gen_random_uuid(),name text not null,description text,duration_days int not null,regular_fee numeric(12,2),offer_fee numeric(12,2),status text not null default 'active',created_at timestamptz default now());
+create table staff(id uuid primary key default gen_random_uuid(),name text not null,email text unique not null,phone text,role text not null default 'counselor',status text not null default 'active',created_at timestamptz default now());
+create table leads(id uuid primary key default gen_random_uuid(),name text not null,phone text not null,whatsapp text,email text,location text,course_id uuid references courses(id),source text,status lead_status default 'new',assigned_to uuid references staff(id),follow_up_at timestamptz,notes text,created_at timestamptz default now());
+create table students(id uuid primary key default gen_random_uuid(),lead_id uuid references leads(id),name text not null,phone text not null,whatsapp text,email text,address text,date_of_birth date,registration_date date default current_date,status text default 'active',notes text,created_at timestamptz default now());
+create table batches(id uuid primary key default gen_random_uuid(),course_id uuid not null references courses(id),name text not null,start_date date not null,end_date date not null,class_time text,trainer_id uuid references staff(id),capacity int,status text default 'upcoming',created_at timestamptz default now());
+create table enrollments(id uuid primary key default gen_random_uuid(),student_id uuid not null references students(id),course_id uuid not null references courses(id),batch_id uuid references batches(id),enrollment_date date default current_date,course_fee numeric(12,2) not null,discount numeric(12,2) default 0,final_fee numeric(12,2) not null,payment_status payment_status default 'pending',status enrollment_status default 'active',created_at timestamptz default now());
+create table payments(id uuid primary key default gen_random_uuid(),enrollment_id uuid not null references enrollments(id),amount numeric(12,2) not null check(amount>0),method payment_method not null,transaction_reference text,paid_at timestamptz default now(),received_by uuid references staff(id),notes text);
+create table follow_ups(id uuid primary key default gen_random_uuid(),lead_id uuid not null references leads(id) on delete cascade,staff_id uuid references staff(id),scheduled_at timestamptz not null,type text default 'call',outcome text,notes text,status text default 'pending',created_at timestamptz default now());
+create table attendance(id uuid primary key default gen_random_uuid(),enrollment_id uuid not null references enrollments(id) on delete cascade,class_date date not null,status attendance_status not null,notes text,unique(enrollment_id,class_date));
+create table certificates(id uuid primary key default gen_random_uuid(),enrollment_id uuid unique not null references enrollments(id),certificate_number text unique not null,issued_date date,status text default 'pending',file_url text);
+insert into courses(name,duration_days,regular_fee,offer_fee) values ('5 Days Basic AI Class',5,999,999),('12 Days Complete Masterclass',12,3999,3999);
